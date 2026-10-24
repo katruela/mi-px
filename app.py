@@ -10,7 +10,6 @@ def home():
 
 @app.route('/stream/<id_canal>')
 def proxy_stream(id_canal):
-    # URL oficial del iframe del canal
     iframe_url = f'https://thedaddy.pk/stream/stream-{id_canal}.php'
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -18,19 +17,21 @@ def proxy_stream(id_canal):
     }
     
     try:
-        # Petición a la página del canal para extraer el token fresco
         res = requests.get(iframe_url, headers=headers, timeout=5)
-        html = res.text
+        print(f"Status Code recibido: {res.status_code}") # Quedará en los logs de Render
         
-        # Expresión regular para buscar el enlace .m3u8 y su token dinámico
-        match = re.search(r'https?://[^\s"\']+\.m3u8\?[^\s"\']+', html)
-        if match:
-            m3u8_url = match.group(0)
-            # Redirige al reproductor directamente hacia el flujo real con el token activo
-            return redirect(m3u8_url)
+        if res.status_code == 200:
+            html = res.text
             
+            # Expresión regular flexible que busca cualquier enlace .m3u8 (con o sin parámetros)
+            match = re.search(r'https?://[^\s"\']+\.m3u8[^\s"\']*', html)
+            if match:
+                m3u8_url = match.group(0)
+                print(f"Stream encontrado: {m3u8_url}")
+                return redirect(m3u8_url)
+                
     except Exception as e:
-        pass
+        print(f"Error en la petición: {e}")
         
     return "No se pudo obtener el stream del canal", 404
 
