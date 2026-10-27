@@ -30,23 +30,19 @@ def generar_playlist():
                 href = link.get('href', '').strip()
                 texto = link.get_text(strip=True)
                 
-                # REGLAS ESTRICTAS:
-                # 1. Ignorar la raíz, index, '#' o enlaces vacíos
                 if not href or href == '#' or href == '/' or 'index' in href:
                     continue
                 
-                # 2. Solo aceptar enlaces que lleven a páginas internas de partidos (.php u otras rutas)
                 if '.php' in href or 'ver' in href or 'play' in href or 'stream' in href:
                     if 'http' not in href:
                         stream_url = f"https://streamtp99a.sbs/{href.lstrip('/')}"
                     else:
                         stream_url = href
                         
-                    # Evitar que se agregue la propia página principal como evento
-                    if stream_url == 'https://streamtp99a.sbs/' or stream_url == 'https://streamtp99a.sbs':
+                    if stream_url in ['https://streamtp99a.sbs/', 'https://streamtp99a.sbs']:
                         continue
                         
-                    nombre_canal = texto if texto and len(texto) > 2 and texto not in ["Ver", "Copiar"] else f"Partido / Evento {canal_idx}"
+                    nombre_canal = texto if texto and len(texto) > 2 and texto not in ["Ver", "Copiar"] else f"Evento Deportivo {canal_idx}"
                     
                     m3u_content += f'#EXTINF:-1 group-title="Eventos En Vivo", {nombre_canal}\n'
                     m3u_content += f'https://mi-px.onrender.com/resolver?url={stream_url}\n'
@@ -68,12 +64,35 @@ def resolver_stream():
     }
     
     try:
+        # 1. Entramos a la página del evento
         res = requests.get(target_url, headers=headers, timeout=10)
         if res.status_code == 200:
-            # Buscamos el enlace de video real (.m3u8) dentro del reproductor del evento
+            # Buscamos el .m3u8 directamente por si está a la vista
             match = re.search(r'https?://[^\s"\']+\.m3u8[^\s"\']*', res.text)
             if match:
                 return redirect(match.group(0))
+            
+            # 2. Si no está a la vista, buscamos si hay un reproductor embebido (iframe)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            iframe = soup.find('iframe', src=True)
+            if iframe:
+                iframe_src = iframe['src']
+                if 'http' not in iframe_src:
+                    if iframe_src.startswith('/'):
+                        iframe_url = f"https://streamtp99a.sbs{iframe_src}"
+                    else:
+                        iframe_url = f"{target_url.rsplit('/', 1)[0]}/{iframe_src}"
+                else:
+                    iframe_url = iframe_src
+                
+                # Entramos al iframe a buscar el video real
+                headers['Referer'] = target_url
+                res_iframe = requests.get(iframe_url, headers=headers, timeout=10)
+                if res_iframe.status_code == 200:
+                    match_iframe = re.search(r'https?://[^\s"\']+\.m3u8[^\s"\']*', res_iframe.text)
+                    if match_iframe:
+                        return redirect(match_iframe.group(0))
+                        
     except Exception as e:
         print(f"Error resolviendo stream: {e}")
         
