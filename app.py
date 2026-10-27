@@ -27,19 +27,27 @@ def generar_playlist():
             
             canal_idx = 1
             for link in links:
-                href = link.get('href', '')
+                href = link.get('href', '').strip()
                 texto = link.get_text(strip=True)
                 
-                # Filtramos los enlaces que llevan a las transmisiones y páginas de eventos
-                if '.php' in href or 'stream' in href or 'play' in href or 'ver' in href:
+                # REGLAS ESTRICTAS:
+                # 1. Ignorar la raíz, index, '#' o enlaces vacíos
+                if not href or href == '#' or href == '/' or 'index' in href:
+                    continue
+                
+                # 2. Solo aceptar enlaces que lleven a páginas internas de partidos (.php u otras rutas)
+                if '.php' in href or 'ver' in href or 'play' in href or 'stream' in href:
                     if 'http' not in href:
                         stream_url = f"https://streamtp99a.sbs/{href.lstrip('/')}"
                     else:
                         stream_url = href
                         
-                    nombre_canal = texto if texto and len(texto) > 2 and texto not in ["Ver", "Copiar"] else f"Evento Deportivo {canal_idx}"
+                    # Evitar que se agregue la propia página principal como evento
+                    if stream_url == 'https://streamtp99a.sbs/' or stream_url == 'https://streamtp99a.sbs':
+                        continue
+                        
+                    nombre_canal = texto if texto and len(texto) > 2 and texto not in ["Ver", "Copiar"] else f"Partido / Evento {canal_idx}"
                     
-                    # Cada canal apunta a nuestro /resolver para que extraiga el video real al hacer clic
                     m3u_content += f'#EXTINF:-1 group-title="Eventos En Vivo", {nombre_canal}\n'
                     m3u_content += f'https://mi-px.onrender.com/resolver?url={stream_url}\n'
                     canal_idx += 1
@@ -62,7 +70,7 @@ def resolver_stream():
     try:
         res = requests.get(target_url, headers=headers, timeout=10)
         if res.status_code == 200:
-            # Buscamos el enlace de video real (.m3u8) oculto dentro del código del evento
+            # Buscamos el enlace de video real (.m3u8) dentro del reproductor del evento
             match = re.search(r'https?://[^\s"\']+\.m3u8[^\s"\']*', res.text)
             if match:
                 return redirect(match.group(0))
